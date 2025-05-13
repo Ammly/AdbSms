@@ -158,6 +158,29 @@ def send_sms(phone_number: str, message: str, sim_id: int = 1):
 - If SMS fails to send, verify that your SIM card works correctly and that the subId is correctly set
 - For timeouts or connection issues, try restarting ADB with `adb kill-server` followed by `adb start-server`
 
+## Technical Details
+
+The utility works by using ADB to call the Android SMS service via the `service call` command. Specifically, it uses the `isms` service's method 5 which corresponds to the `sendText` function in the [ISms.aidl](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android10-d4-s1-release/telephony/java/com/android/internal/telephony/ISms.aidl) interface.
+
+The command structure is:
+```
+adb shell service call isms 5 [arguments...]
+```
+
+Where the arguments correspond to:
+- `i32 [simId]` - The SIM card ID to use (default: 3 for eSIM)
+- `s16 "com.android.mms.service"` - The calling package name
+- `s16 "null"` - Default SMSC (Short Message Service Center)
+- `s16 [recipient]` - The recipient's phone number
+- `s16 "null"` - No scAddr override
+- `s16 [message]` - The actual message content
+- `s16 "null"` - No sentIntent
+- `s16 "null"` - No deliveryIntent
+- `i32 0` - Flags (for Android 11+)
+- `i64 0` - Timestamp (for Android 11+)
+
+This approach does not require any special permissions beyond standard ADB access to your device with USB debugging enabled.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
