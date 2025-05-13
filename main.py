@@ -183,31 +183,36 @@ def parse_arguments():
 
 
 def main():
-    """Main entry point for the script."""
+    """
+    Main entry point for the script.
+    
+    Returns:
+        int: Exit code (0 for success, 1 for failure)
+    """
     args = parse_arguments()
     
     # Check ADB connection first
     if not check_adb_connection():
-        sys.exit(1)
+        return 1
         
     if args.check_only:
         print("✅ ADB connection successful")
-        sys.exit(0)
+        return 0
     
     if args.single:
         if not args.number or not args.message:
             print("Error: --number and --message are required with --single")
-            sys.exit(1)
+            return 1
         
         success = send_sms(args.number, args.message, args.sim_id)
-        sys.exit(0 if success else 1)
+        return 0 if success else 1
     else:
         # Bulk mode
         print(f"Sending messages from {args.file} with SIM ID {args.sim_id} and {args.delay}s delay")
         success, failure = send_bulk_sms(args.file, args.sim_id, args.delay)
         print(f"Completed: {success} succeeded, {failure} failed")
-        sys.exit(1 if failure > 0 else 0)
+        return 1 if failure > 0 else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

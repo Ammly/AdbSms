@@ -158,6 +158,37 @@ def send_sms(phone_number: str, message: str, sim_id: int = 1):
 - If SMS fails to send, verify that your SIM card works correctly and that the subId is correctly set
 - For timeouts or connection issues, try restarting ADB with `adb kill-server` followed by `adb start-server`
 
+## Testing
+
+The tests cover all major functionality including SMS sending, ADB connection checking, and command-line interface operations.
+
+### Running Tests
+
+You can run the tests using pytest:
+
+```bash
+# Using Poetry (recommended)
+poetry run pytest
+
+# With more detailed output
+poetry run pytest -v
+
+# Run a specific test file
+poetry run pytest tests/test_send_sms.py
+
+# Run a specific test
+poetry run pytest tests/test_send_sms.py::test_send_sms_success
+```
+
+### Test Coverage
+
+The tests use mocking to avoid actual ADB calls during testing, allowing you to run the tests without a connected device. The test suite includes:
+
+- Unit tests for all core functions
+- CLI argument parsing tests
+- Error handling tests
+- Edge case handling
+
 ## Technical Details
 
 The utility works by using ADB to call the Android SMS service via the `service call` command. Specifically, it uses the `isms` service's method 5 which corresponds to the `sendText` function in the [ISms.aidl](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android10-d4-s1-release/telephony/java/com/android/internal/telephony/ISms.aidl) interface.
