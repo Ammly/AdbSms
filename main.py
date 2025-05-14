@@ -121,18 +121,28 @@ def check_adb_connection() -> bool:
         for line in lines[1:]:  # Skip the header line
             if line.strip() and "\tdevice" in line:
                 device_found = True
+                print(f"Connected device found: {line.strip()}")
                 break
                 
         if not device_found:
             print("Device found but not authorized or offline. Check your device.")
+            # Print the actual devices output to help diagnose
+            for line in lines:
+                print(f"  > {line}")
             return False
             
         return True
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
+        print(f"ADB command error: {e}")
+        print(f"Error output: {e.stderr}")
+        return False
+    except FileNotFoundError:
         print("ADB not found or not working properly. Make sure ADB is installed and in your PATH.")
         return False
     except Exception as e:
         print(f"Error checking ADB connection: {e}")
+        import traceback
+        print(traceback.format_exc())
         return False
 
 

@@ -1,0 +1,108 @@
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=adbsms
+      - POSTGRES_PASSWORD=adbsms
+      - POSTGRES_DB=adbsms
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adbsms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis instance for Celery broker
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Flask API service with Gunicorn
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+      # Mount Android configuration
+      - /home/awkinyua/.android:/root/.android
+      # Allow direct USB access
+      - /dev/bus/usb:/dev/bus/usb
+    # Use host network to access the ADB server on the host
+    network_mode: host
+    environment:
+      - FLASK_APP=api.app
+      - FLASK_DEBUG=0 # Disable debug for production
+      - DATABASE_URL=postgresql://adbsms:adbsms@localhost/adbsms
+      - CELERY_BROKER_URL=redis://localhost:6379/0
+      - CELERY_RESULT_BACKEND=redis://localhost:6379/1
+    # Add privileged mode to access USB devices
+    privileged: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Use Gunicorn with proper settings
+    command: bash -c "cd /app && ANDROID_SERIAL=0B141JEC216648 gunicorn --bind 0.0.0.0:5000 --workers 4 --threads 2 --timeout 60 api.app:app"
+
+  # Celery worker
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+      # Mount Android configuration
+      - /home/awkinyua/.android:/root/.android
+      # Allow direct USB access
+      - /dev/bus/usb:/dev/bus/usb
+    # Use host network to access the ADB server on the host
+    network_mode: host
+    environment:
+      - DATABASE_URL=postgresql://adbsms:adbsms@localhost/adbsms
+      - CELERY_BROKER_URL=redis://localhost:6379/0
+      - CELERY_RESULT_BACKEND=redis://localhost:6379/1
+      # Set the specific Android device serial
+      - ANDROID_SERIAL=0B141JEC216648
+    # Add privileged mode to access USB devices
+    privileged: true
+    depends_on:
+      - redis
+      - postgres
+      - api
+    command: bash -c "cd /app && ANDROID_SERIAL=0B141JEC216648 celery -A api.celery_app worker --loglevel=info"
+
+  # Celery beat for scheduled tasks (optional)
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://adbsms:adbsms@localhost/adbsms
+      - CELERY_BROKER_URL=redis://localhost:6379/0
+      - CELERY_RESULT_BACKEND=redis://localhost:6379/1
+    depends_on:
+      - redis
+      - postgres
+      - api
+    network_mode: host
+    command: celery -A api.celery_app beat --loglevel=info
+
+volumes:
+  postgres_data:
+  redis_data:
