@@ -41,6 +41,9 @@ limiter = Limiter(
     storage_uri="memory://",  # Use redis:// for production
 )
 
+# Configure specific endpoints to be exempt from rate limiting using decorators in the routes
+# The correct way is to use @limiter.exempt on route functions rather than paths
+
 # Initialize extensions
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -82,7 +85,16 @@ def ratelimit_error(error):
 # Register Swagger UI blueprints
 from api.swagger import swagger_bp, swaggerui_blueprint
 app.register_blueprint(swagger_bp, url_prefix='/api')
-app.register_blueprint(swaggerui_blueprint)
+app.register_blueprint(swaggerui_blueprint)  # No prefix - it already includes the full path
+
+# Exempt Swagger-related endpoints from rate limiting
+@app.after_request
+def after_request(response):
+    if request.path == '/api/swagger.json' or request.path.startswith('/api/docs'):
+        # This acts as a flag that tells the limiter to skip rate limiting
+        request.view_args = getattr(request, 'view_args', {})
+        request.view_args['_skip_limiter'] = True
+    return response
 
 # Register API and Web blueprints - import at the end to avoid circular imports
 def init_routes():

@@ -8,10 +8,10 @@ from flask_swagger_ui import get_swaggerui_blueprint
 swagger_bp = Blueprint('swagger', __name__)
 
 # Swagger UI configuration
-SWAGGER_URL = '/api/docs'  # URL for exposing Swagger UI
-API_URL = '/api/swagger.json'  # Our API url
+SWAGGER_URL = '/api/docs'  # Full URL path where Swagger UI will be served
+API_URL = '/api/swagger.json'  # URL for the Swagger JSON endpoint
 
-# Register Swagger UI blueprint
+# Register Swagger UI blueprint WITHOUT a url_prefix (will use exact SWAGGER_URL)
 swaggerui_blueprint = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
@@ -20,6 +20,7 @@ swaggerui_blueprint = get_swaggerui_blueprint(
     }
 )
 
+# Use the exempt decorator here when the app and limiter are available
 @swagger_bp.route('/swagger.json')
 def swagger_json():
     """Return Swagger specification"""

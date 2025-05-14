@@ -507,15 +507,6 @@ def health_check():
     })
 
 
-# API documentation - Open access (no auth required)
-@api_v1.route('/docs', methods=['GET'])
-def api_docs():
-    """API documentation"""
-    return jsonify({
-        "message": "Please visit /api/docs for Swagger UI documentation"
-    })
-
-
 @api_v1.route('/messages', methods=['GET'])
 @handle_exceptions
 @require_api_key

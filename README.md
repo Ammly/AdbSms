@@ -211,7 +211,7 @@ curl -X POST "http://localhost:5000/api/sms/bulk" \
 
 #### API Documentation
 
-The API includes Swagger documentation accessible at http://localhost:5000/api/docs
+The API includes Swagger documentation accessible at http://localhost:5000/api/docs/
 
 ### Using the Web Interface
 
