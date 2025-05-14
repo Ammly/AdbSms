@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Statistics - AdbSms</title>
+    <!-- TailwindCSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js via CDN -->
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Heroicons (for icons) -->
+    <script src="https://unpkg.com/@heroicons/vue/outline@1.0.4/dist/hero-icons-outline.umd.min.js"></script>
+    <!-- Custom Tailwind configuration -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#f0fdfa",
+                100: "#ccfbf1",
+                200: "#99f6e4",
+                300: "#5eead4",
+                400: "#2dd4bf",
+                500: "#14b8a6",
+                600: "#0d9488",
+                700: "#0f766e",
+                800: "#115e59",
+                900: "#134e4a",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      [x-cloak] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50">
+    <div x-data="statsApp()" x-cloak>
+      <!-- Top Navigation Bar -->
+      <nav class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between h-16">
+            <div class="flex">
+              <div class="flex-shrink-0 flex items-center">
+                <span class="text-primary-600 font-bold text-xl">AdbSms</span>
+              </div>
+              <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                <a
+                  href="/"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Dashboard
+                </a>
+                <a
+                  href="/bulk"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Bulk SMS
+                </a>
+                <a
+                  href="/history"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  History
+                </a>
+                <a
+                  href="/stats"
+                  class="border-primary-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Statistics
+                </a>
+              </div>
+            </div>
+            <div class="flex items-center">
+              <!-- Device Status Indicator -->
+              <div class="flex items-center">
+                <span
+                  class="h-4 w-4 rounded-full mr-2"
+                  :class="deviceConnected ? 'bg-green-500' : 'bg-red-500'"
+                  :class="{ 'animate-pulse': isCheckingDevice }"
+                ></span>
+                <span
+                  class="text-sm text-gray-600"
+                  x-text="deviceConnected ? 'Device Connected' : 'No Device'"
+                ></span>
+              </div>
+              <button
+                @click="checkDeviceStatus()"
+                class="ml-4 px-3 py-1 rounded-md text-sm font-medium text-primary-600 hover:bg-primary-50 focus:outline-none"
+                :disabled="isCheckingDevice"
+              >
+                <span
+                  x-text="isCheckingDevice ? 'Checking...' : 'Refresh'"
+                ></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Alerts -->
+        <div
+          class="px-4 py-3 mb-6 rounded-md"
+          x-show="showAlert"
+          :class="alertType === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'"
+        >
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg
+                class="h-5 w-5"
+                x-show="alertType === 'success'"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              <svg
+                class="h-5 w-5"
+                x-show="alertType === 'error'"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm font-medium" x-text="alertMessage"></p>
+            </div>
+            <div class="ml-auto pl-3">
+              <div class="-mx-1.5 -my-1.5">
+                <button
+                  @click="showAlert = false"
+                  class="inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                  :class="alertType === 'success' ? 'bg-green-50 text-green-500 hover:bg-green-100 focus:ring-green-600 focus:ring-offset-green-50' : 'bg-red-50 text-red-500 hover:bg-red-100 focus:ring-red-600 focus:ring-offset-red-50'"
+                >
+                  <span class="sr-only">Dismiss</span>
+                  <svg
+                    class="h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 001.414 1.414L11.414 10l4.293 4.293a1 1 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 01-1.414-1.414L8.586 10 4.293 5.707a1 1 010-1.414z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Time period selector -->
+        <div class="mb-6 bg-white shadow rounded-lg p-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">
+              Statistics Overview
+            </h3>
+            <div class="flex space-x-4">
+              <select
+                x-model="timeRange"
+                @change="refreshStats()"
+                class="mt-1 block pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+              >
+                <option value="day">Last 24 Hours</option>
+                <option value="week">Last 7 Days</option>
+                <option value="month">Last 30 Days</option>
+                <option value="year">Last 12 Months</option>
+                <option value="all">All Time</option>
+              </select>
+              <button
+                @click="refreshStats()"
+                class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                <span x-show="!isLoading">Refresh</span>
+                <span x-show="isLoading" class="flex items-center">
+                  <svg
+                    class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Loading...
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="isLoading" class="py-10 text-center">
+          <svg
+            class="animate-spin mx-auto h-8 w-8 text-primary-500"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          <p class="mt-2 text-sm text-gray-500">Loading statistics...</p>
+        </div>
+
+        <div x-show="!isLoading">
+          <!-- Summary Cards -->
+          <div
+            class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-6"
+          >
+            <!-- Total Messages Card -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+              <div class="px-4 py-5 sm:p-6">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0 bg-primary-100 rounded-md p-3">
+                    <svg
+                      class="h-6 w-6 text-primary-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                      />
+                    </svg>
+                  </div>
+                  <div class="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt class="text-sm font-medium text-gray-500 truncate">
+                        Total Messages
+                      </dt>
+                      <dd>
+                        <div
+                          class="text-lg font-medium text-gray-900"
+                          x-text="stats.messages.total || 0"
+                        ></div>
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sent Messages Card -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+              <div class="px-4 py-5 sm:p-6">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0 bg-green-100 rounded-md p-3">
+                    <svg
+                      class="h-6 w-6 text-green-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
+                  <div class="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt class="text-sm font-medium text-gray-500 truncate">
+                        Sent Successfully
+                      </dt>
+                      <dd>
+                        <div class="text-lg font-medium text-gray-900">
+                          <span x-text="stats.messages.sent || 0"></span>
+                          <span
+                            class="text-sm text-gray-500 ml-1"
+                            x-show="stats.messages.total > 0"
+                            x-text="`(${calculatePercentage(stats.messages.sent, stats.messages.total)}%)`"
+                          ></span>
+                        </div>
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Failed Messages Card -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+              <div class="px-4 py-5 sm:p-6">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0 bg-red-100 rounded-md p-3">
+                    <svg
+                      class="h-6 w-6 text-red-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div class="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt class="text-sm font-medium text-gray-500 truncate">
+                        Failed Messages
+                      </dt>
+                      <dd>
+                        <div class="text-lg font-medium text-gray-900">
+                          <span x-text="stats.messages.failed || 0"></span>
+                          <span
+                            class="text-sm text-gray-500 ml-1"
+                            x-show="stats.messages.total > 0"
+                            x-text="`(${calculatePercentage(stats.messages.failed, stats.messages.total)}%)`"
+                          ></span>
+                        </div>
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bulk Jobs Card -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+              <div class="px-4 py-5 sm:p-6">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0 bg-blue-100 rounded-md p-3">
+                    <svg
+                      class="h-6 w-6 text-blue-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                      />
+                    </svg>
+                  </div>
+                  <div class="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt class="text-sm font-medium text-gray-500 truncate">
+                        Total Bulk Jobs
+                      </dt>
+                      <dd>
+                        <div
+                          class="text-lg font-medium text-gray-900"
+                          x-text="stats.jobs.total || 0"
+                        ></div>
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts Section -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Message Status Chart -->
+            <div class="bg-white shadow rounded-lg p-6">
+              <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Message Status Distribution
+              </h3>
+              <div class="w-full" style="height: 300px">
+                <canvas id="messageStatusChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Bulk Jobs Status Chart -->
+            <div class="bg-white shadow rounded-lg p-6">
+              <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Bulk Jobs Status Distribution
+              </h3>
+              <div class="w-full" style="height: 300px">
+                <canvas id="bulkJobsChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Messages Over Time Chart -->
+            <div class="bg-white shadow rounded-lg p-6">
+              <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Messages Over Time
+              </h3>
+              <div class="w-full" style="height: 300px">
+                <canvas id="messagesTimeChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Success Rate Chart -->
+            <div class="bg-white shadow rounded-lg p-6">
+              <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Success Rate Over Time
+              </h3>
+              <div class="w-full" style="height: 300px">
+                <canvas id="successRateChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alpine.js App Data -->
+    <script>
+      function statsApp() {
+        return {
+          // API settings
+          apiKey: "{{ api_key }}",
+          apiUrl: "/api",
+
+          // Device status
+          deviceConnected: false,
+          deviceDetails: null,
+          isCheckingDevice: false,
+
+          // UI state
+          showAlert: false,
+          alertType: "success",
+          alertMessage: "",
+          isLoading: false,
+          timeRange: "week",
+
+          // Charts
+          charts: {
+            messageStatus: null,
+            bulkJobs: null,
+            messagesTime: null,
+            successRate: null,
+          },
+
+          // Stats data
+          stats: {
+            messages: {
+              total: 0,
+              sent: 0,
+              failed: 0,
+              pending: 0,
+              processing: 0,
+            },
+            jobs: {
+              total: 0,
+              completed: 0,
+              failed: 0,
+              pending: 0,
+              processing: 0,
+            },
+            timeData: {
+              labels: [],
+              messages: [],
+              successRate: [],
+            },
+          },
+
+          // Initialize app
+          init() {
+            // Check device status on load
+            this.checkDeviceStatus();
+            // Load initial stats
+            this.loadStats();
+          },
+
+          // Show alert message
+          showAlertMessage(type, message) {
+            this.alertType = type;
+            this.alertMessage = message;
+            this.showAlert = true;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+              this.showAlert = false;
+            }, 5000);
+          },
+
+          // Calculate percentage
+          calculatePercentage(value, total) {
+            if (total === 0) return 0;
+            return Math.round((value / total) * 100);
+          },
+
+          // Check device connection status
+          async checkDeviceStatus() {
+            this.isCheckingDevice = true;
+
+            try {
+              const response = await fetch(`${this.apiUrl}/device/status`, {
+                headers: {
+                  "X-API-Key": this.apiKey,
+                },
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                this.deviceConnected = data.connected;
+                this.deviceDetails = data;
+              } else {
+                this.deviceConnected = false;
+                this.showAlertMessage(
+                  "error",
+                  data.message || "Failed to check device status"
+                );
+              }
+            } catch (error) {
+              console.error("Error checking device status:", error);
+              this.deviceConnected = false;
+              this.showAlertMessage(
+                "error",
+                "Network error while checking device status"
+              );
+            } finally {
+              this.isCheckingDevice = false;
+            }
+          },
+
+          // Refresh stats with selected time range
+          refreshStats() {
+            this.loadStats();
+          },
+
+          // Load stats data
+          async loadStats() {
+            this.isLoading = true;
+
+            try {
+              let url = new URL(`${this.apiUrl}/stats`, window.location.origin);
+              url.searchParams.append("time_range", this.timeRange);
+
+              const response = await fetch(url, {
+                headers: {
+                  "X-API-Key": this.apiKey,
+                },
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                // Update stats object
+                this.stats = data;
+
+                // Initialize/update charts after data is loaded
+                this.$nextTick(() => {
+                  this.initializeCharts();
+                });
+              } else {
+                console.error("Failed to load stats:", data);
+                this.showAlertMessage(
+                  "error",
+                  data.message || "Failed to load statistics"
+                );
+              }
+            } catch (error) {
+              console.error("Error loading stats:", error);
+              this.showAlertMessage(
+                "error",
+                "Network error while loading statistics"
+              );
+
+              // Use mock data for demonstration
+              this.loadMockStats();
+            } finally {
+              this.isLoading = false;
+            }
+          },
+
+          // Initialize or update charts
+          initializeCharts() {
+            this.initMessageStatusChart();
+            this.initBulkJobsChart();
+            this.initMessagesTimeChart();
+            this.initSuccessRateChart();
+          },
+
+          // Message Status Chart
+          initMessageStatusChart() {
+            const ctx = document.getElementById("messageStatusChart");
+
+            // Destroy existing chart if it exists
+            if (this.charts.messageStatus) {
+              this.charts.messageStatus.destroy();
+            }
+
+            this.charts.messageStatus = new Chart(ctx, {
+              type: "doughnut",
+              data: {
+                labels: ["Sent", "Failed", "Pending", "Processing"],
+                datasets: [
+                  {
+                    data: [
+                      this.stats.messages.sent || 0,
+                      this.stats.messages.failed || 0,
+                      this.stats.messages.pending || 0,
+                      this.stats.messages.processing || 0,
+                    ],
+                    backgroundColor: [
+                      "#10B981", // green
+                      "#EF4444", // red
+                      "#F59E0B", // amber
+                      "#3B82F6", // blue
+                    ],
+                    borderWidth: 1,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                  },
+                },
+              },
+            });
+          },
+
+          // Bulk Jobs Chart
+          initBulkJobsChart() {
+            const ctx = document.getElementById("bulkJobsChart");
+
+            // Destroy existing chart if it exists
+            if (this.charts.bulkJobs) {
+              this.charts.bulkJobs.destroy();
+            }
+
+            this.charts.bulkJobs = new Chart(ctx, {
+              type: "doughnut",
+              data: {
+                labels: ["Completed", "Failed", "Pending", "Processing"],
+                datasets: [
+                  {
+                    data: [
+                      this.stats.jobs.completed || 0,
+                      this.stats.jobs.failed || 0,
+                      this.stats.jobs.pending || 0,
+                      this.stats.jobs.processing || 0,
+                    ],
+                    backgroundColor: [
+                      "#10B981", // green
+                      "#EF4444", // red
+                      "#F59E0B", // amber
+                      "#3B82F6", // blue
+                    ],
+                    borderWidth: 1,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                  },
+                },
+              },
+            });
+          },
+
+          // Messages Time Chart
+          initMessagesTimeChart() {
+            const ctx = document.getElementById("messagesTimeChart");
+
+            // Destroy existing chart if it exists
+            if (this.charts.messagesTime) {
+              this.charts.messagesTime.destroy();
+            }
+
+            this.charts.messagesTime = new Chart(ctx, {
+              type: "bar",
+              data: {
+                labels: this.stats.timeData?.labels || [],
+                datasets: [
+                  {
+                    label: "Messages Sent",
+                    data: this.stats.timeData?.messages || [],
+                    backgroundColor: "#14b8a6",
+                    borderWidth: 1,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                  },
+                },
+              },
+            });
+          },
+
+          // Success Rate Chart
+          initSuccessRateChart() {
+            const ctx = document.getElementById("successRateChart");
+
+            // Destroy existing chart if it exists
+            if (this.charts.successRate) {
+              this.charts.successRate.destroy();
+            }
+
+            this.charts.successRate = new Chart(ctx, {
+              type: "line",
+              data: {
+                labels: this.stats.timeData?.labels || [],
+                datasets: [
+                  {
+                    label: "Success Rate (%)",
+                    data: this.stats.timeData?.successRate || [],
+                    borderColor: "#10B981",
+                    backgroundColor: "rgba(16, 185, 129, 0.1)",
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.2,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 100,
+                  },
+                },
+              },
+            });
+          },
+
+          // Load mock stats for development
+          loadMockStats() {
+            // Mock data for demonstration
+            this.stats = {
+              messages: {
+                total: 1456,
+                sent: 1254,
+                failed: 87,
+                pending: 65,
+                processing: 50,
+              },
+              jobs: {
+                total: 42,
+                completed: 35,
+                failed: 3,
+                pending: 2,
+                processing: 2,
+              },
+              timeData: {
+                labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                messages: [120, 190, 145, 182, 210, 205, 150],
+                successRate: [92, 94, 88, 95, 97, 96, 93],
+              },
+            };
+
+            // Initialize charts with mock data
+            this.$nextTick(() => {
+              this.initializeCharts();
+            });
+          },
+        };
+      }
+    </script>
+  </body>
+</html>

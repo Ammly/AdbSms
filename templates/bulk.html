@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bulk SMS - AdbSms</title>
+    <!-- TailwindCSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js via CDN -->
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+    <!-- Heroicons (for icons) -->
+    <script src="https://unpkg.com/@heroicons/vue/outline@1.0.4/dist/hero-icons-outline.umd.min.js"></script>
+    <!-- Custom Tailwind configuration -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#f0fdfa",
+                100: "#ccfbf1",
+                200: "#99f6e4",
+                300: "#5eead4",
+                400: "#2dd4bf",
+                500: "#14b8a6",
+                600: "#0d9488",
+                700: "#0f766e",
+                800: "#115e59",
+                900: "#134e4a",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      [x-cloak] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50">
+    <div x-data="bulkSmsApp()" x-cloak>
+      <!-- Top Navigation Bar -->
+      <nav class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between h-16">
+            <div class="flex">
+              <div class="flex-shrink-0 flex items-center">
+                <span class="text-primary-600 font-bold text-xl">AdbSms</span>
+              </div>
+              <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                <a
+                  href="/"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Dashboard
+                </a>
+                <a
+                  href="/bulk"
+                  class="border-primary-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Bulk SMS
+                </a>
+                <a
+                  href="/history"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  History
+                </a>
+                <a
+                  href="/stats"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Statistics
+                </a>
+              </div>
+            </div>
+            <div class="flex items-center">
+              <!-- Device Status Indicator -->
+              <div class="flex items-center">
+                <span
+                  class="h-4 w-4 rounded-full mr-2"
+                  :class="deviceConnected ? 'bg-green-500' : 'bg-red-500'"
+                  :class="{ 'animate-pulse': isCheckingDevice }"
+                ></span>
+                <span
+                  class="text-sm text-gray-600"
+                  x-text="deviceConnected ? 'Device Connected' : 'No Device'"
+                ></span>
+              </div>
+              <button
+                @click="checkDeviceStatus()"
+                class="ml-4 px-3 py-1 rounded-md text-sm font-medium text-primary-600 hover:bg-primary-50 focus:outline-none"
+                :disabled="isCheckingDevice"
+              >
+                <span
+                  x-text="isCheckingDevice ? 'Checking...' : 'Refresh'"
+                ></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Alerts -->
+        <div
+          class="px-4 py-3 mb-6 rounded-md"
+          x-show="showAlert"
+          :class="alertType === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'"
+        >
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg
+                class="h-5 w-5"
+                x-show="alertType === 'success'"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              <svg
+                class="h-5 w-5"
+                x-show="alertType === 'error'"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm font-medium" x-text="alertMessage"></p>
+            </div>
+            <div class="ml-auto pl-3">
+              <div class="-mx-1.5 -my-1.5">
+                <button
+                  @click="showAlert = false"
+                  class="inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                  :class="alertType === 'success' ? 'bg-green-50 text-green-500 hover:bg-green-100 focus:ring-green-600 focus:ring-offset-green-50' : 'bg-red-50 text-red-500 hover:bg-red-100 focus:ring-red-600 focus:ring-offset-red-50'"
+                >
+                  <span class="sr-only">Dismiss</span>
+                  <svg
+                    class="h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 01-1.414-1.414L8.586 10 4.293 5.707a1 1 010-1.414z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bulk SMS Features -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div
+            class="px-4 py-5 sm:px-6 bg-gradient-to-r from-primary-700 to-primary-600"
+          >
+            <h3 class="text-lg leading-6 font-medium text-white">
+              Bulk SMS Management
+            </h3>
+            <p class="mt-1 max-w-2xl text-sm text-primary-50">
+              Upload and manage bulk SMS campaigns
+            </p>
+          </div>
+          <div class="px-4 py-5 sm:p-6">
+            <!-- Tab Navigation -->
+            <div class="border-b border-gray-200">
+              <nav class="-mb-px flex space-x-8" aria-label="Bulk SMS options">
+                <button
+                  @click="activeTab = 'upload'"
+                  class="py-4 px-1 border-b-2 font-medium text-sm"
+                  :class="activeTab === 'upload' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                >
+                  Upload CSV
+                </button>
+                <button
+                  @click="activeTab = 'template'"
+                  class="py-4 px-1 border-b-2 font-medium text-sm"
+                  :class="activeTab === 'template' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                >
+                  CSV Template Generator
+                </button>
+                <button
+                  @click="activeTab = 'active'"
+                  class="py-4 px-1 border-b-2 font-medium text-sm"
+                  :class="activeTab === 'active' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                >
+                  Active Jobs
+                </button>
+              </nav>
+            </div>
+
+            <!-- Upload CSV Tab -->
+            <div x-show="activeTab === 'upload'" class="py-6">
+              <form @submit.prevent="uploadBulkSms">
+                <div class="space-y-6">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700"
+                      >CSV File</label
+                    >
+                    <div
+                      class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md"
+                      :class="{'bg-primary-50 border-primary-300': isDragging}"
+                      @dragover.prevent="isDragging = true"
+                      @dragleave.prevent="isDragging = false"
+                      @drop.prevent="handleFileDrop($event)"
+                    >
+                      <div class="space-y-1 text-center">
+                        <svg
+                          class="mx-auto h-12 w-12 text-gray-400"
+                          stroke="currentColor"
+                          fill="none"
+                          viewBox="0 0 48 48"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                        <div class="flex justify-center text-sm text-gray-600">
+                          <label
+                            for="bulk-file"
+                            class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500"
+                          >
+                            <span x-show="!bulkSms.file">Select CSV file</span>
+                            <span
+                              x-show="bulkSms.file"
+                              x-text="bulkSms.file ? bulkSms.file.name : ''"
+                            ></span>
+                            <input
+                              id="bulk-file"
+                              type="file"
+                              accept=".csv"
+                              @change="handleFileChange"
+                              class="sr-only"
+                            />
+                          </label>
+                        </div>
+                        <p class="text-xs text-gray-500">
+                          CSV with phone_number and message columns
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                    <div>
+                      <label
+                        for="bulkSimId"
+                        class="block text-sm font-medium text-gray-700"
+                        >SIM Card ID</label
+                      >
+                      <div class="mt-1">
+                        <select
+                          x-model.number="bulkSms.simId"
+                          id="bulkSimId"
+                          class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        >
+                          <option value="3">3 (eSIM, default)</option>
+                          <option value="0">0 (Main SIM)</option>
+                          <option value="1">1 (Secondary SIM)</option>
+                          <option value="2">2 (Other)</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label
+                        for="bulkDelay"
+                        class="block text-sm font-medium text-gray-700"
+                        >Delay (seconds)</label
+                      >
+                      <div class="mt-1">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          max="10"
+                          x-model.number="bulkSms.delay"
+                          id="bulkDelay"
+                          class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <p class="mt-1 text-xs text-gray-500">
+                        Time between messages (0.1-10 seconds)
+                      </p>
+                    </div>
+                    <div>
+                      <label
+                        for="bulkPriority"
+                        class="block text-sm font-medium text-gray-700"
+                        >Priority</label
+                      >
+                      <div class="mt-1">
+                        <select
+                          x-model="bulkSms.priority"
+                          id="bulkPriority"
+                          class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="high">High</option>
+                          <option value="low">Low</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      for="bulkSchedule"
+                      class="block text-sm font-medium text-gray-700"
+                      >Schedule (optional)</label
+                    >
+                    <div class="mt-1">
+                      <input
+                        type="datetime-local"
+                        x-model="bulkSms.scheduleTime"
+                        id="bulkSchedule"
+                        class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      />
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">
+                      Leave empty to send immediately
+                    </p>
+                  </div>
+
+                  <div>
+                    <button
+                      type="submit"
+                      class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      :disabled="!bulkSms.file || isUploadingBulk"
+                    >
+                      <span x-show="!isUploadingBulk">Upload and Process</span>
+                      <span x-show="isUploadingBulk" class="flex items-center">
+                        <svg
+                          class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            class="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            stroke-width="4"
+                          ></circle>
+                          <path
+                            class="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Uploading...
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <!-- CSV Template Generator Tab -->
+            <div x-show="activeTab === 'template'" class="py-6">
+              <div class="space-y-6">
+                <div>
+                  <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    CSV Template Generator
+                  </h3>
+                  <p class="mt-1 text-sm text-gray-500">
+                    Create a template file for your bulk SMS campaign
+                  </p>
+                </div>
+
+                <div class="space-y-4">
+                  <div>
+                    <label
+                      for="templateRows"
+                      class="block text-sm font-medium text-gray-700"
+                      >Number of Rows</label
+                    >
+                    <div class="mt-1">
+                      <input
+                        type="number"
+                        x-model.number="templateOptions.rows"
+                        id="templateRows"
+                        min="1"
+                        max="1000"
+                        class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      for="templateMessage"
+                      class="block text-sm font-medium text-gray-700"
+                      >Default Message</label
+                    >
+                    <div class="mt-1">
+                      <textarea
+                        id="templateMessage"
+                        x-model="templateOptions.message"
+                        rows="2"
+                        placeholder="Enter default message text (optional)"
+                        class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      ></textarea>
+                    </div>
+                  </div>
+
+                  <div class="flex items-start">
+                    <div class="flex items-center h-5">
+                      <input
+                        type="checkbox"
+                        id="includePhonePrefix"
+                        x-model="templateOptions.includePrefix"
+                        class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div class="ml-3 text-sm">
+                      <label
+                        for="includePhonePrefix"
+                        class="font-medium text-gray-700"
+                        >Include Phone Prefix</label
+                      >
+                      <p class="text-gray-500">
+                        Add a common prefix to all phone numbers
+                      </p>
+                    </div>
+                  </div>
+
+                  <div x-show="templateOptions.includePrefix">
+                    <label
+                      for="phonePrefix"
+                      class="block text-sm font-medium text-gray-700"
+                      >Phone Prefix</label
+                    >
+                    <div class="mt-1">
+                      <input
+                        type="text"
+                        x-model="templateOptions.prefix"
+                        id="phonePrefix"
+                        placeholder="+254"
+                        class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    @click="generateAndDownloadTemplate()"
+                    class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    :disabled="templateOptions.rows < 1"
+                  >
+                    Generate and Download Template
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Active Jobs Tab -->
+            <div x-show="activeTab === 'active'" class="py-6">
+              <div class="space-y-6">
+                <div class="flex justify-between items-center">
+                  <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    Active Jobs
+                  </h3>
+                  <button
+                    @click="loadActiveJobs()"
+                    class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    :disabled="isLoadingJobs"
+                  >
+                    <span x-show="!isLoadingJobs">Refresh</span>
+                    <span x-show="isLoadingJobs">Loading...</span>
+                  </button>
+                </div>
+
+                <div x-show="isLoadingJobs" class="py-10 text-center">
+                  <svg
+                    class="animate-spin mx-auto h-8 w-8 text-primary-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  <p class="mt-2 text-sm text-gray-500">
+                    Loading active jobs...
+                  </p>
+                </div>
+
+                <div
+                  x-show="!isLoadingJobs && activeJobs.length === 0"
+                  class="py-10 text-center"
+                >
+                  <p class="text-sm text-gray-500">No active jobs found</p>
+                </div>
+
+                <div
+                  x-show="!isLoadingJobs && activeJobs.length > 0"
+                  class="overflow-x-auto"
+                >
+                  <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                      <tr>
+                        <th
+                          scope="col"
+                          class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Job ID
+                        </th>
+                        <th
+                          scope="col"
+                          class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Filename
+                        </th>
+                        <th
+                          scope="col"
+                          class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Status
+                        </th>
+                        <th
+                          scope="col"
+                          class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Progress
+                        </th>
+                        <th
+                          scope="col"
+                          class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Created
+                        </th>
+                        <th scope="col" class="relative px-6 py-3">
+                          <span class="sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                      <template x-for="job in activeJobs" :key="job.id">
+                        <tr>
+                          <td
+                            class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
+                            x-text="job.id"
+                          ></td>
+                          <td
+                            class="px-6 py-4 text-sm text-gray-500"
+                            x-text="getBasename(job.filename || '')"
+                          ></td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <span
+                              class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                              :class="{
+                                                            'bg-green-100 text-green-800': job.status === 'completed',
+                                                            'bg-blue-100 text-blue-800': job.status === 'processing',
+                                                            'bg-yellow-100 text-yellow-800': job.status === 'pending',
+                                                            'bg-red-100 text-red-800': job.status === 'failed'
+                                                          }"
+                              x-text="job.status"
+                            >
+                            </span>
+                          </td>
+                          <td
+                            class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                          >
+                            <div
+                              class="w-full bg-gray-200 rounded-full h-2.5"
+                              x-show="job.status !== 'failed'"
+                            >
+                              <div
+                                class="bg-primary-600 h-2.5 rounded-full"
+                                :style="`width: ${job.progress || 0}%`"
+                              ></div>
+                            </div>
+                            <span
+                              class="text-xs"
+                              x-text="`${job.successful_messages || 0}/${job.total_messages || 0} (${job.progress || 0}%)`"
+                            ></span>
+                          </td>
+                          <td
+                            class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                            x-text="formatDate(job.created_at)"
+                          ></td>
+                          <td
+                            class="px-6 py-4 whitespace-nowrap text-sm text-right"
+                          >
+                            <button
+                              @click="viewJobDetails(job)"
+                              class="text-primary-600 hover:text-primary-900"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Job Details Modal -->
+        <div
+          x-show="showJobModal"
+          class="fixed z-10 inset-0 overflow-y-auto"
+          aria-labelledby="modal-title"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"
+          >
+            <div
+              x-show="showJobModal"
+              x-transition:enter="ease-out duration-300"
+              x-transition:enter-start="opacity-0"
+              x-transition:enter-end="opacity-100"
+              x-transition:leave="ease-in duration-200"
+              x-transition:leave-start="opacity-100"
+              x-transition:leave-end="opacity-0"
+              class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              @click="showJobModal = false"
+              aria-hidden="true"
+            ></div>
+
+            <span
+              class="hidden sm:inline-block sm:align-middle sm:h-screen"
+              aria-hidden="true"
+              >&#8203;</span
+            >
+
+            <div
+              x-show="showJobModal"
+              x-transition:enter="ease-out duration-300"
+              x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+              x-transition:leave="ease-in duration-200"
+              x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+              x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              class="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full sm:p-6"
+            >
+              <div>
+                <div class="flex justify-between items-start">
+                  <h3
+                    class="text-lg leading-6 font-medium text-gray-900"
+                    id="modal-title"
+                  >
+                    Job Details
+                  </h3>
+                  <button
+                    type="button"
+                    @click="showJobModal = false"
+                    class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
+                  >
+                    <span class="sr-only">Close</span>
+                    <svg
+                      class="h-6 w-6"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="mt-4" x-show="selectedJob">
+                  <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Job ID</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="selectedJob?.id"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Status</dt>
+                      <dd class="mt-1 text-sm">
+                        <span
+                          class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                          :class="{
+                                                    'bg-green-100 text-green-800': selectedJob?.status === 'completed',
+                                                    'bg-blue-100 text-blue-800': selectedJob?.status === 'processing',
+                                                    'bg-yellow-100 text-yellow-800': selectedJob?.status === 'pending',
+                                                    'bg-red-100 text-red-800': selectedJob?.status === 'failed'
+                                                  }"
+                          x-text="selectedJob?.status"
+                        >
+                        </span>
+                      </dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">File</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="getBasename(selectedJob?.filename || '')"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Created</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="formatDate(selectedJob?.created_at)"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">SIM ID</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="selectedJob?.sim_id"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Delay</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="selectedJob?.delay + ' seconds'"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                      <dt class="text-sm font-medium text-gray-500">
+                        Progress
+                      </dt>
+                      <dd class="mt-1 text-sm text-gray-900">
+                        <div
+                          class="w-full bg-gray-200 rounded-full h-2.5"
+                          x-show="selectedJob?.status !== 'failed'"
+                        >
+                          <div
+                            class="bg-primary-600 h-2.5 rounded-full"
+                            :style="`width: ${selectedJob?.progress || 0}%`"
+                          ></div>
+                        </div>
+                        <div class="flex justify-between text-xs mt-1">
+                          <span
+                            x-text="`Success: ${selectedJob?.successful_messages || 0}`"
+                          ></span>
+                          <span
+                            x-text="`Failed: ${selectedJob?.failed_messages || 0}`"
+                          ></span>
+                          <span
+                            x-text="`Total: ${selectedJob?.total_messages || 0}`"
+                          ></span>
+                          <span
+                            x-text="`${selectedJob?.progress || 0}%`"
+                          ></span>
+                        </div>
+                      </dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                      <dt class="text-sm font-medium text-gray-500">Task ID</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900 font-mono text-xs overflow-auto"
+                        x-text="selectedJob?.task_id || 'N/A'"
+                      ></dd>
+                    </div>
+                  </dl>
+
+                  <div
+                    class="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense"
+                  >
+                    <button
+                      type="button"
+                      @click="refreshJobDetails()"
+                      class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:col-start-1 sm:text-sm"
+                    >
+                      Refresh Details
+                    </button>
+                    <button
+                      type="button"
+                      @click="showJobModal = false"
+                      class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:col-start-2 sm:text-sm"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alpine.js App Data -->
+    <script>
+      function bulkSmsApp() {
+        return {
+          // API settings
+          apiKey: "{{ api_key }}",
+          apiUrl: "/api",
+
+          // Active tab
+          activeTab: "upload",
+
+          // Device status
+          deviceConnected: false,
+          deviceDetails: null,
+          isCheckingDevice: false,
+
+          // UI state
+          showAlert: false,
+          alertType: "success",
+          alertMessage: "",
+          isDragging: false,
+
+          // Bulk SMS Upload
+          bulkSms: {
+            file: null,
+            simId: 3,
+            delay: 1.0,
+            priority: "normal",
+            scheduleTime: "",
+          },
+          isUploadingBulk: false,
+
+          // CSV Template Generator
+          templateOptions: {
+            rows: 10,
+            message: "Sample message for bulk SMS",
+            includePrefix: true,
+            prefix: "+254",
+          },
+
+          // Active Jobs
+          activeJobs: [],
+          isLoadingJobs: false,
+          showJobModal: false,
+          selectedJob: null,
+
+          // Initialize app
+          init() {
+            // Check device status on page load
+            this.checkDeviceStatus();
+
+            // Load active jobs
+            this.loadActiveJobs();
+          },
+
+          // Show alert message
+          showAlertMessage(type, message) {
+            this.alertType = type;
+            this.alertMessage = message;
+            this.showAlert = true;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+              this.showAlert = false;
+            }, 5000);
+          },
+
+          // Check device connection status
+          async checkDeviceStatus() {
+            this.isCheckingDevice = true;
+
+            try {
+              const response = await fetch(`${this.apiUrl}/device/status`, {
+                headers: {
+                  "X-API-Key": this.apiKey,
+                },
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                this.deviceConnected = data.connected;
+                this.deviceDetails = data;
+
+                if (data.connected) {
+                  this.showAlertMessage(
+                    "success",
+                    `Device connected: ${data.device_id || "Unknown"}`
+                  );
+                } else {
+                  this.showAlertMessage(
+                    "error",
+                    "No device connected. Please connect an Android device."
+                  );
+                }
+              } else {
+                this.deviceConnected = false;
+                this.showAlertMessage(
+                  "error",
+                  data.message || "Failed to check device status"
+                );
+              }
+            } catch (error) {
+              console.error("Error checking device status:", error);
+              this.deviceConnected = false;
+              this.showAlertMessage(
+                "error",
+                "Network error while checking device status"
+              );
+            } finally {
+              this.isCheckingDevice = false;
+            }
+          },
+
+          // Handle file drop for CSV upload
+          handleFileDrop(event) {
+            this.isDragging = false;
+            const files = event.dataTransfer.files;
+
+            if (files.length === 0) return;
+
+            const file = files[0];
+            if (file.type !== "text/csv" && !file.name.endsWith(".csv")) {
+              this.showAlertMessage("error", "Please upload a CSV file");
+              return;
+            }
+
+            this.bulkSms.file = file;
+          },
+
+          // Handle file input change
+          handleFileChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type !== "text/csv" && !file.name.endsWith(".csv")) {
+              this.showAlertMessage("error", "Please upload a CSV file");
+              return;
+            }
+
+            this.bulkSms.file = file;
+          },
+
+          // Upload and process bulk SMS file
+          async uploadBulkSms() {
+            if (!this.deviceConnected) {
+              this.showAlertMessage(
+                "error",
+                "No device connected. Please connect an Android device first."
+              );
+              return;
+            }
+
+            if (!this.bulkSms.file) {
+              this.showAlertMessage("error", "Please select a CSV file");
+              return;
+            }
+
+            this.isUploadingBulk = true;
+
+            try {
+              const formData = new FormData();
+              formData.append("file", this.bulkSms.file);
+              formData.append("sim_id", this.bulkSms.simId);
+              formData.append("delay", this.bulkSms.delay);
+
+              const response = await fetch(`${this.apiUrl}/sms/bulk`, {
+                method: "POST",
+                headers: {
+                  "X-API-Key": this.apiKey,
+                },
+                body: formData,
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                this.showAlertMessage(
+                  "success",
+                  `CSV file queued for processing: ${this.bulkSms.file.name}`
+                );
+
+                // Clear form
+                this.bulkSms.file = null;
+                document.getElementById("bulk-file").value = "";
+
+                // Switch to active jobs tab
+                this.activeTab = "active";
+
+                // Refresh the active jobs list after a delay
+                setTimeout(() => {
+                  this.loadActiveJobs();
+                }, 1000);
+              } else {
+                this.showAlertMessage(
+                  "error",
+                  data.message || "Failed to process CSV file"
+                );
+              }
+            } catch (error) {
+              console.error("Error uploading bulk SMS:", error);
+              this.showAlertMessage(
+                "error",
+                "Network error while uploading CSV file"
+              );
+            } finally {
+              this.isUploadingBulk = false;
+            }
+          },
+
+          // Generate and download CSV template
+          generateAndDownloadTemplate() {
+            const rows = this.templateOptions.rows;
+            if (rows < 1) {
+              this.showAlertMessage("error", "Please specify at least 1 row");
+              return;
+            }
+
+            // Generate CSV content
+            let csvContent = "phone_number,message\n";
+
+            for (let i = 0; i < rows; i++) {
+              // Create a sample phone number
+              let phoneNumber = this.templateOptions.includePrefix
+                ? this.templateOptions.prefix
+                : "";
+
+              // Add some random digits
+              phoneNumber += Math.floor(100000000 + Math.random() * 900000000);
+
+              // Add the message (escape quotes)
+              const message = this.templateOptions.message.replace(/"/g, '""');
+
+              // Add the row
+              csvContent += `${phoneNumber},"${message}"\n`;
+            }
+
+            // Create a downloadable file
+            const blob = new Blob([csvContent], {
+              type: "text/csv;charset=utf-8;",
+            });
+            const url = URL.createObjectURL(blob);
+
+            // Create link and trigger download
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "sms_template.csv");
+            link.style.display = "none";
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            this.showAlertMessage(
+              "success",
+              `Generated CSV template with ${rows} rows`
+            );
+          },
+
+          // Load active jobs
+          async loadActiveJobs() {
+            this.isLoadingJobs = true;
+
+            try {
+              // Call API to get jobs
+              const response = await fetch(
+                `${this.apiUrl}/bulk?page=1&per_page=10`,
+                {
+                  headers: {
+                    "X-API-Key": this.apiKey,
+                  },
+                }
+              );
+
+              const data = await response.json();
+
+              if (response.ok) {
+                // Use real data from the API instead of mock data
+                this.activeJobs = data.jobs || [];
+
+                // Add progress percentage to each job
+                this.activeJobs.forEach((job) => {
+                  if (job.total_messages > 0) {
+                    job.progress = Math.round(
+                      (((job.successful_messages || 0) +
+                        (job.failed_messages || 0)) /
+                        job.total_messages) *
+                        100
+                    );
+                  } else {
+                    job.progress = 0;
+                  }
+                });
+              } else {
+                console.error("Failed to load jobs:", data);
+                this.showAlertMessage("error", "Failed to load active jobs");
+              }
+            } catch (error) {
+              console.error("Error loading jobs:", error);
+              this.showAlertMessage(
+                "error",
+                "Network error while loading jobs"
+              );
+            } finally {
+              this.isLoadingJobs = false;
+            }
+          },
+
+          // Get filename without path
+          getBasename(path) {
+            return path.split("/").pop();
+          },
+
+          // View job details
+          viewJobDetails(job) {
+            this.selectedJob = { ...job };
+            this.showJobModal = true;
+          },
+
+          // Refresh details of selected job
+          async refreshJobDetails() {
+            if (!this.selectedJob) return;
+
+            try {
+              // Call API to get updated job details
+              // For now, simulate fetching updated job details
+              const jobId = this.selectedJob.id;
+
+              // TODO: Replace with actual API call
+              const response = await fetch(`${this.apiUrl}/bulk/${jobId}`, {
+                headers: {
+                  "X-API-Key": this.apiKey,
+                },
+              });
+
+              // For now, just update progress values
+              if (this.selectedJob.status === "processing") {
+                const currentProgress = this.selectedJob.progress || 0;
+                const newProgress = Math.min(currentProgress + 10, 100);
+
+                this.selectedJob.progress = newProgress;
+                this.selectedJob.successful_messages = Math.floor(
+                  (this.selectedJob.total_messages * newProgress) / 100
+                );
+
+                if (newProgress >= 100) {
+                  this.selectedJob.status = "completed";
+                  this.selectedJob.completed_at = new Date().toISOString();
+                }
+
+                // Also update in the main jobs list
+                const index = this.activeJobs.findIndex((j) => j.id === jobId);
+                if (index !== -1) {
+                  this.activeJobs[index] = { ...this.selectedJob };
+                }
+
+                this.showAlertMessage("success", "Job details refreshed");
+              }
+            } catch (error) {
+              console.error("Error refreshing job details:", error);
+              this.showAlertMessage("error", "Failed to refresh job details");
+            }
+          },
+
+          // Format date for display
+          formatDate(dateString) {
+            if (!dateString) return "N/A";
+            const date = new Date(dateString);
+            return date.toLocaleString();
+          },
+
+          // Mock job data for development
+          getMockJobs() {
+            return [
+              {
+                id: 1,
+                filename: "/tmp/uploads/campaign_may_2025.csv",
+                sim_id: 3,
+                delay: 1.0,
+                status: "completed",
+                total_messages: 156,
+                successful_messages: 152,
+                failed_messages: 4,
+                created_at: "2025-05-14T10:15:22",
+                completed_at: "2025-05-14T10:18:45",
+                task_id: "a748f0a3-1d48-4c0f-80b5-91d9830fcbc8",
+                progress: 100,
+              },
+              {
+                id: 2,
+                filename: "/tmp/uploads/promo_offers.csv",
+                sim_id: 3,
+                delay: 0.5,
+                status: "processing",
+                total_messages: 85,
+                successful_messages: 42,
+                failed_messages: 3,
+                created_at: "2025-05-14T11:20:10",
+                completed_at: null,
+                task_id: "b82d5e6f-3c18-4fa2-a03d-569f84c19283",
+                progress: 53,
+              },
+              {
+                id: 3,
+                filename: "/tmp/uploads/test.csv",
+                sim_id: 1,
+                delay: 2.0,
+                status: "pending",
+                total_messages: 5,
+                successful_messages: 0,
+                failed_messages: 0,
+                created_at: "2025-05-14T11:45:20",
+                completed_at: null,
+                task_id: "c93e6f7a-4d29-5gb3-b14e-670g95d20394",
+                progress: 0,
+              },
+            ];
+          },
+        };
+      }
+    </script>
+  </body>
+</html>

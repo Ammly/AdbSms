@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Create Flask app
-app = Flask(__name__)
+app = Flask(__name__, template_folder='../templates')
 
 # Configure the app
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://adbsms:adbsms@localhost/adbsms')
@@ -46,8 +46,8 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
 # Basic routes
-@app.route('/')
-def index():
+@app.route('/api')
+def api_index():
     return jsonify({
         "name": "AdbSms API",
         "version": "0.2.0",
@@ -84,10 +84,15 @@ from api.swagger import swagger_bp, swaggerui_blueprint
 app.register_blueprint(swagger_bp, url_prefix='/api')
 app.register_blueprint(swaggerui_blueprint)
 
-# Register API blueprints - import at the end to avoid circular imports
+# Register API and Web blueprints - import at the end to avoid circular imports
 def init_routes():
+    # Register API routes
     from api.routes import register_blueprints
     register_blueprints(app)
+    
+    # Register Web interface routes
+    from api.web_routes import register_web_routes
+    register_web_routes(app)
 
 # Initialize routes after app has been fully configured
 if __name__ != '__main__':

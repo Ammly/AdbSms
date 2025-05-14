@@ -4,7 +4,9 @@ API routes for AdbSms - High-performance implementation
 import os
 import tempfile
 import time
-from datetime import datetime
+import io
+import base64
+from datetime import datetime, timedelta
 from flask import request, jsonify, Blueprint, current_app, url_for
 from werkzeug.utils import secure_filename
 from functools import wraps
@@ -186,11 +188,9 @@ def send_bulk_sms():
     if not file.filename.endswith('.csv'):
         return jsonify({"error": "File must be a CSV"}), 400
     
-    # Save the file to a temporary location
-    filename = secure_filename(file.filename)
-    temp_dir = tempfile.mkdtemp()
-    temp_path = os.path.join(temp_dir, filename)
-    file.save(temp_path)
+    # Read the file content instead of saving to a temporary file
+    # This way we can pass the content directly to the Celery task
+    csv_content = file.read().decode('utf-8')
     
     # Get parameters
     sim_id = request.form.get('sim_id', 3, type=int)
@@ -202,15 +202,15 @@ def send_bulk_sms():
     if delay > 10.0:
         return jsonify({"error": "Delay cannot exceed 10 seconds"}), 400
     
-    # Queue the processing task
+    # Queue the processing task with the CSV content directly
     task = process_csv_upload.delay(
-        temp_path,
-        filename,
+        csv_content,
+        secure_filename(file.filename),
         sim_id,
         delay
     )
     
-    logger.info(f"Bulk SMS job queued: {filename}, task: {task.id}")
+    logger.info(f"Bulk SMS job queued: {file.filename}, task: {task.id}")
     
     return jsonify({
         "status": "accepted",
@@ -273,6 +273,69 @@ def list_bulk_jobs():
     })
 
 
+@api_v1.route('/messages/history', methods=['GET'])
+@handle_exceptions
+@require_api_key
+def messages_history():
+    """Get message history with pagination and filtering"""
+    # Import here to avoid circular import
+    from api.app import db
+    from sqlalchemy import or_
+    
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    # Limit page size
+    if per_page > 100:
+        per_page = 100
+    
+    # Get filter parameters
+    status = request.args.get('status', 'all', type=str)
+    date_range = request.args.get('date_range', 'all', type=str)
+    phone_number = request.args.get('phone_number', '', type=str)
+    
+    # Build query with filters
+    query = Message.query
+    
+    # Filter by status
+    if status != 'all':
+        query = query.filter_by(status=status)
+    
+    # Filter by date range
+    now = datetime.utcnow()
+    if date_range == 'today':
+        query = query.filter(Message.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
+    elif date_range == 'yesterday':
+        yesterday = now - timedelta(days=1)
+        query = query.filter(
+            Message.created_at >= yesterday.replace(hour=0, minute=0, second=0, microsecond=0),
+            Message.created_at < now.replace(hour=0, minute=0, second=0, microsecond=0)
+        )
+    elif date_range == 'week':
+        query = query.filter(Message.created_at >= now - timedelta(days=7))
+    elif date_range == 'month':
+        query = query.filter(Message.created_at >= now - timedelta(days=30))
+    
+    # Filter by phone number (partial match)
+    if phone_number:
+        query = query.filter(Message.phone_number.like(f'%{phone_number}%'))
+    
+    # Execute paginated query
+    paginated_messages = query.order_by(Message.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    # Return paginated results
+    return jsonify({
+        "total": paginated_messages.total,
+        "pages": paginated_messages.pages,
+        "current_page": paginated_messages.page,
+        "per_page": paginated_messages.per_page,
+        "messages": [message.to_dict() for message in paginated_messages.items]
+    })
+
+
 # Statistics endpoints
 @api_v1.route('/stats', methods=['GET'])
 @handle_exceptions
@@ -281,33 +344,154 @@ def get_stats():
     """Get SMS statistics"""
     # Import here to avoid circular import
     from api.app import db
+    from sqlalchemy import func
+    
+    # Get time range parameter
+    time_range = request.args.get('time_range', 'all', type=str)
+    
+    # Set time filter based on time range
+    now = datetime.utcnow()
+    time_filter = None
+    
+    if time_range == 'day':
+        time_filter = now - timedelta(days=1)
+    elif time_range == 'week':
+        time_filter = now - timedelta(days=7)
+    elif time_range == 'month':
+        time_filter = now - timedelta(days=30)
+    elif time_range == 'year':
+        time_filter = now - timedelta(days=365)
+    
+    # Base queries
+    message_query = Message.query
+    job_query = BulkMessageJob.query
+    
+    # Apply time filter if specified
+    if time_filter:
+        message_query = message_query.filter(Message.created_at >= time_filter)
+        job_query = job_query.filter(BulkMessageJob.created_at >= time_filter)
     
     # Count messages by status
     messages = {
-        "total": Message.query.count(),
-        "sent": Message.query.filter_by(status="sent").count(),
-        "failed": Message.query.filter_by(status="failed").count(),
-        "pending": Message.query.filter_by(status="pending").count(),
-        "processing": Message.query.filter_by(status="processing").count()
+        "total": message_query.count(),
+        "sent": message_query.filter_by(status="sent").count(),
+        "failed": message_query.filter_by(status="failed").count(),
+        "pending": message_query.filter_by(status="pending").count(),
+        "processing": message_query.filter_by(status="processing").count()
     }
     
     # Count bulk jobs by status
     jobs = {
-        "total": BulkMessageJob.query.count(),
-        "completed": BulkMessageJob.query.filter_by(status="completed").count(),
-        "failed": BulkMessageJob.query.filter_by(status="failed").count(),
-        "pending": BulkMessageJob.query.filter_by(status="pending").count(),
-        "processing": BulkMessageJob.query.filter_by(status="processing").count()
+        "total": job_query.count(),
+        "completed": job_query.filter_by(status="completed").count(),
+        "failed": job_query.filter_by(status="failed").count(),
+        "pending": job_query.filter_by(status="pending").count(),
+        "processing": job_query.filter_by(status="processing").count()
     }
     
     # Device status
     device = DeviceStatus.query.order_by(DeviceStatus.last_check.desc()).first()
     device_status = device.to_dict() if device else {"connected": False, "state": None}
     
+    # Get time-series data for charts
+    timeData = {
+        "labels": [],
+        "messages": [],
+        "successRate": []
+    }
+    
+    # Generate time labels and data based on time range
+    if time_range == 'day':
+        # Hourly data for the last 24 hours
+        for i in range(23, -1, -1):
+            start_time = now - timedelta(hours=i)
+            end_time = now - timedelta(hours=i-1) if i > 0 else now
+            
+            # Add hour label
+            timeData["labels"].append(start_time.strftime('%H:00'))
+            
+            # Count messages in this hour
+            hour_messages = message_query.filter(
+                Message.created_at >= start_time,
+                Message.created_at < end_time
+            )
+            
+            total = hour_messages.count()
+            successful = hour_messages.filter_by(status="sent").count()
+            
+            timeData["messages"].append(total)
+            timeData["successRate"].append(round((successful / total * 100) if total > 0 else 0))
+            
+    elif time_range == 'week':
+        # Daily data for the last 7 days
+        for i in range(6, -1, -1):
+            day = now - timedelta(days=i)
+            day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+            
+            # Add day label
+            timeData["labels"].append(day.strftime('%a'))
+            
+            # Count messages on this day
+            day_messages = message_query.filter(
+                Message.created_at >= day_start,
+                Message.created_at < day_end
+            )
+            
+            total = day_messages.count()
+            successful = day_messages.filter_by(status="sent").count()
+            
+            timeData["messages"].append(total)
+            timeData["successRate"].append(round((successful / total * 100) if total > 0 else 0))
+            
+    elif time_range == 'month':
+        # Weekly data for the last 30 days
+        for i in range(4, 0, -1):
+            week_start = now - timedelta(days=i*7)
+            week_end = now - timedelta(days=(i-1)*7) if i > 1 else now
+            
+            # Add week label
+            timeData["labels"].append(f"Week {5-i}")
+            
+            # Count messages in this week
+            week_messages = message_query.filter(
+                Message.created_at >= week_start,
+                Message.created_at < week_end
+            )
+            
+            total = week_messages.count()
+            successful = week_messages.filter_by(status="sent").count()
+            
+            timeData["messages"].append(total)
+            timeData["successRate"].append(round((successful / total * 100) if total > 0 else 0))
+            
+    elif time_range == 'year' or time_range == 'all':
+        # Monthly data for the last 12 months
+        for i in range(11, -1, -1):
+            month_start = (now - timedelta(days=30*i)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            month_end = (month_start.replace(month=month_start.month+1) if month_start.month < 12 
+                        else month_start.replace(year=month_start.year+1, month=1))
+            
+            # Add month label
+            timeData["labels"].append(month_start.strftime('%b'))
+            
+            # Count messages in this month
+            month_messages = message_query.filter(
+                Message.created_at >= month_start,
+                Message.created_at < month_end
+            )
+            
+            total = month_messages.count()
+            successful = month_messages.filter_by(status="sent").count()
+            
+            timeData["messages"].append(total)
+            timeData["successRate"].append(round((successful / total * 100) if total > 0 else 0))
+    
     return jsonify({
         "messages": messages,
         "jobs": jobs,
-        "device": device_status
+        "device": device_status,
+        "timeData": timeData
     })
 
 
@@ -330,6 +514,40 @@ def api_docs():
     return jsonify({
         "message": "Please visit /api/docs for Swagger UI documentation"
     })
+
+
+@api_v1.route('/messages', methods=['GET'])
+@handle_exceptions
+@require_api_key
+def list_messages():
+    """List recent messages"""
+    # Import here to avoid circular import
+    from api.app import db
+    
+    # Get query parameters
+    limit = request.args.get('limit', 10, type=int)
+    sort = request.args.get('sort', 'desc', type=str)
+    
+    # Limit to reasonable values
+    if limit > 100:
+        limit = 100
+    
+    # Build query with appropriate sorting
+    query = Message.query
+    if sort.lower() == 'desc':
+        query = query.order_by(Message.created_at.desc())
+    else:
+        query = query.order_by(Message.created_at.asc())
+    
+    # Execute the query with limit
+    messages = query.limit(limit).all()
+    
+    return jsonify({
+        "messages": [message.to_dict() for message in messages],
+        "count": len(messages),
+        "limit": limit
+    })
+
 
 # Define a function to register blueprints to avoid circular imports
 def register_blueprints(app):

@@ -210,6 +210,38 @@ curl -X POST "http://localhost:5000/api/sms/bulk" \
 
 The API includes Swagger documentation accessible at http://localhost:5000/api/docs
 
+### Using the Web Interface
+
+AdbSms provides a user-friendly web interface that makes it easy to manage SMS sending operations:
+
+1. **Dashboard** - Send single SMS messages and view recent activity
+2. **Bulk SMS** - Upload CSV files for bulk sending, create CSV templates, and monitor active jobs
+3. **History** - View detailed message history with filtering and search capabilities
+4. **Statistics** - Analyze messaging statistics and performance metrics
+
+#### Accessing the Web Interface
+
+When running the application locally or via Docker:
+
+```bash
+# Access the web interface at
+http://localhost:5000/
+```
+
+#### Web Interface Features
+
+- **Device Connection Status** - Real-time monitoring of connected Android device
+- **Single Message Sending** - Send individual SMS messages with customizable options
+- **Bulk SMS Processing** - Upload CSV files with message data for bulk processing
+- **Job Management** - Track and manage bulk SMS jobs
+- **Message History** - View detailed history of all sent messages with status information
+- **Advanced Filtering** - Filter messages by status, date range, and phone number
+- **Statistics Dashboard** - View charts and metrics about message sending performance
+
+#### Screenshots
+
+[Screenshots to be added]
+
 ### As a Python Module
 
 You can also import the script and use its functions in your own Python code:

@@ -6,6 +6,7 @@ import sys
 import pandas as pd
 import time
 import logging
+import io
 from datetime import datetime
 from pathlib import Path
 import subprocess
@@ -367,9 +368,15 @@ def check_adb_connection_task():
 
 
 @celery.task(bind=True, name="api.tasks.process_csv_upload")
-def process_csv_upload(self, temp_file_path, original_filename, sim_id, delay):
+def process_csv_upload(self, csv_content, original_filename, sim_id, delay):
     """
     Process an uploaded CSV file for bulk SMS
+    
+    Parameters:
+    - csv_content: The CSV content as a string
+    - original_filename: The name of the uploaded file
+    - sim_id: SIM card ID to use for sending
+    - delay: Delay between messages in seconds
     """
     # Use the app context to perform database operations
     with flask_app.app_context():
@@ -378,9 +385,18 @@ def process_csv_upload(self, temp_file_path, original_filename, sim_id, delay):
         from api.models import BulkMessageJob
         
         try:
-            # Validate CSV file structure
+            # Create a temporary file to store the CSV content
+            temp_dir = tempfile.mkdtemp()
+            temp_path = os.path.join(temp_dir, original_filename)
+            
+            # Save the CSV content to a temporary file
+            with open(temp_path, 'w') as f:
+                f.write(csv_content)
+            
+            # Validate CSV file structure using pandas
+            import pandas as pd
             df = pd.read_csv(
-                temp_file_path,
+                io.StringIO(csv_content),
                 dtype={
                     'phone_number': str,
                     'message': str
@@ -405,7 +421,7 @@ def process_csv_upload(self, temp_file_path, original_filename, sim_id, delay):
             
             # Create a job entry
             job = BulkMessageJob(
-                filename=temp_file_path,
+                filename=temp_path,
                 sim_id=sim_id,
                 delay=delay,
                 status="pending",
@@ -415,6 +431,10 @@ def process_csv_upload(self, temp_file_path, original_filename, sim_id, delay):
             
             db.session.add(job)
             db.session.commit()
+            
+            # Save the CSV to the job's file path
+            with open(job.filename, 'w') as f:
+                f.write(csv_content)
             
             # Start the bulk SMS processing
             process_bulk_sms_job.delay(job.id)

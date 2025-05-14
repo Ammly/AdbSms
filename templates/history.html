@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Message History - AdbSms</title>
+    <!-- TailwindCSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js via CDN -->
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+    <!-- Heroicons (for icons) -->
+    <script src="https://unpkg.com/@heroicons/vue/outline@1.0.4/dist/hero-icons-outline.umd.min.js"></script>
+    <!-- Custom Tailwind configuration -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#f0fdfa",
+                100: "#ccfbf1",
+                200: "#99f6e4",
+                300: "#5eead4",
+                400: "#2dd4bf",
+                500: "#14b8a6",
+                600: "#0d9488",
+                700: "#0f766e",
+                800: "#115e59",
+                900: "#134e4a",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      [x-cloak] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50">
+    <div x-data="historyApp()" x-cloak>
+      <!-- Top Navigation Bar -->
+      <nav class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between h-16">
+            <div class="flex">
+              <div class="flex-shrink-0 flex items-center">
+                <span class="text-primary-600 font-bold text-xl">AdbSms</span>
+              </div>
+              <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                <a
+                  href="/"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Dashboard
+                </a>
+                <a
+                  href="/bulk"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Bulk SMS
+                </a>
+                <a
+                  href="/history"
+                  class="border-primary-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  History
+                </a>
+                <a
+                  href="/stats"
+                  class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Statistics
+                </a>
+              </div>
+            </div>
+            <div class="flex items-center">
+              <!-- Device Status Indicator -->
+              <div class="flex items-center">
+                <span
+                  class="h-4 w-4 rounded-full mr-2"
+                  :class="deviceConnected ? 'bg-green-500' : 'bg-red-500'"
+                  :class="{ 'animate-pulse': isCheckingDevice }"
+                ></span>
+                <span
+                  class="text-sm text-gray-600"
+                  x-text="deviceConnected ? 'Device Connected' : 'No Device'"
+                ></span>
+              </div>
+              <button
+                @click="checkDeviceStatus()"
+                class="ml-4 px-3 py-1 rounded-md text-sm font-medium text-primary-600 hover:bg-primary-50 focus:outline-none"
+                :disabled="isCheckingDevice"
+              >
+                <span
+                  x-text="isCheckingDevice ? 'Checking...' : 'Refresh'"
+                ></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Alerts -->
+        <div
+          class="px-4 py-3 mb-6 rounded-md"
+          x-show="showAlert"
+          :class="alertType === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'"
+        >
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg
+                class="h-5 w-5"
+                x-show="alertType === 'success'"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              <svg
+                class="h-5 w-5"
+                x-show="alertType === 'error'"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm font-medium" x-text="alertMessage"></p>
+            </div>
+            <div class="ml-auto pl-3">
+              <div class="-mx-1.5 -my-1.5">
+                <button
+                  @click="showAlert = false"
+                  class="inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                  :class="alertType === 'success' ? 'bg-green-50 text-green-500 hover:bg-green-100 focus:ring-green-600 focus:ring-offset-green-50' : 'bg-red-50 text-red-500 hover:bg-red-100 focus:ring-red-600 focus:ring-offset-red-50'"
+                >
+                  <span class="sr-only">Dismiss</span>
+                  <svg
+                    class="h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 011.414 1.414L11.414 10l4.293 4.293a1 1 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 01-1.414-1.414L8.586 10 4.293 5.707a1 1 010-1.414z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- History Main Content -->
+        <div class="bg-white shadow rounded-lg">
+          <div
+            class="px-4 py-5 sm:px-6 bg-gradient-to-r from-gray-700 to-gray-600"
+          >
+            <h3 class="text-lg leading-6 font-medium text-white">
+              Message History
+            </h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-200">
+              Search and filter all SMS messages sent through AdbSms
+            </p>
+          </div>
+          <div class="px-4 py-5 sm:p-6">
+            <!-- Filter Controls -->
+            <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-4">
+              <div>
+                <label
+                  for="statusFilter"
+                  class="block text-sm font-medium text-gray-700"
+                  >Status</label
+                >
+                <select
+                  id="statusFilter"
+                  x-model="filters.status"
+                  class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                >
+                  <option value="all">All Status</option>
+                  <option value="sent">Sent</option>
+                  <option value="failed">Failed</option>
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  for="dateFilter"
+                  class="block text-sm font-medium text-gray-700"
+                  >Date Range</label
+                >
+                <select
+                  id="dateFilter"
+                  x-model="filters.dateRange"
+                  class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="week">Last 7 Days</option>
+                  <option value="month">Last 30 Days</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  for="phoneFilter"
+                  class="block text-sm font-medium text-gray-700"
+                  >Phone Number</label
+                >
+                <div class="mt-1">
+                  <input
+                    type="text"
+                    id="phoneFilter"
+                    x-model="filters.phoneNumber"
+                    class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    placeholder="Filter by phone number"
+                  />
+                </div>
+              </div>
+              <div class="flex items-end">
+                <button
+                  @click="loadMessages()"
+                  class="bg-primary-600 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  :disabled="isLoading"
+                >
+                  <span x-show="!isLoading">Apply Filters</span>
+                  <span x-show="isLoading" class="flex items-center">
+                    <svg
+                      class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Loading...
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Messages Table -->
+            <div x-show="isLoading" class="py-10 text-center">
+              <svg
+                class="animate-spin mx-auto h-8 w-8 text-primary-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              <p class="mt-2 text-sm text-gray-500">Loading messages...</p>
+            </div>
+
+            <div
+              x-show="!isLoading && messages.length === 0"
+              class="py-10 text-center"
+            >
+              <p class="text-sm text-gray-500">No messages found</p>
+            </div>
+
+            <div
+              x-show="!isLoading && messages.length > 0"
+              class="overflow-x-auto"
+            >
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      ID
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Phone
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Message
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      SIM
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Created
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Sent
+                    </th>
+                    <th scope="col" class="relative px-6 py-3">
+                      <span class="sr-only">Details</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <template x-for="message in messages" :key="message.id">
+                    <tr>
+                      <td
+                        class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                        x-text="message.id"
+                      ></td>
+                      <td
+                        class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
+                        x-text="message.phone_number"
+                      ></td>
+                      <td
+                        class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate"
+                        x-text="message.content"
+                      ></td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span
+                          class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                          :class="{
+                            'bg-green-100 text-green-800': message.status === 'sent',
+                            'bg-yellow-100 text-yellow-800': message.status === 'pending' || message.status === 'processing',
+                            'bg-red-100 text-red-800': message.status === 'failed'
+                          }"
+                          x-text="message.status"
+                        >
+                        </span>
+                      </td>
+                      <td
+                        class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                        x-text="message.sim_id"
+                      ></td>
+                      <td
+                        class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                        x-text="formatDate(message.created_at)"
+                      ></td>
+                      <td
+                        class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                        x-text="message.sent_at ? formatDate(message.sent_at) : 'N/A'"
+                      ></td>
+                      <td
+                        class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"
+                      >
+                        <button
+                          @click="viewMessageDetails(message)"
+                          class="text-primary-600 hover:text-primary-900"
+                        >
+                          Details
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div
+              class="mt-4 flex items-center justify-between border-t border-gray-200 px-4 py-3 sm:px-6"
+              x-show="!isLoading && totalPages > 0"
+            >
+              <div class="flex flex-1 justify-between sm:hidden">
+                <button
+                  @click="previousPage()"
+                  :disabled="currentPage === 1"
+                  class="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  :class="{ 'opacity-50 cursor-not-allowed': currentPage === 1 }"
+                >
+                  Previous
+                </button>
+                <button
+                  @click="nextPage()"
+                  :disabled="currentPage === totalPages"
+                  class="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  :class="{
+                    'opacity-50 cursor-not-allowed': currentPage === totalPages,
+                  }"
+                >
+                  Next
+                </button>
+              </div>
+              <div
+                class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p class="text-sm text-gray-700">
+                    Showing
+                    <span class="font-medium" x-text="startItem"></span>
+                    to
+                    <span class="font-medium" x-text="endItem"></span>
+                    of
+                    <span class="font-medium" x-text="totalItems"></span>
+                    results
+                  </p>
+                </div>
+                <div>
+                  <nav
+                    class="isolate inline-flex -space-x-px rounded-md shadow-sm"
+                    aria-label="Pagination"
+                  >
+                    <button
+                      @click="previousPage()"
+                      :disabled="currentPage === 1"
+                      class="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
+                      :class="{ 'opacity-50 cursor-not-allowed': currentPage === 1 }"
+                    >
+                      <span class="sr-only">Previous</span>
+                      <svg
+                        class="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                    <template x-for="page in pageNumbers" :key="page">
+                      <button
+                        @click="goToPage(page)"
+                        class="relative inline-flex items-center px-4 py-2 text-sm font-semibold"
+                        :class="page === currentPage ? 'bg-primary-500 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600' : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'"
+                        x-text="page"
+                      ></button>
+                    </template>
+                    <button
+                      @click="nextPage()"
+                      :disabled="currentPage === totalPages"
+                      class="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
+                      :class="{
+                        'opacity-50 cursor-not-allowed': currentPage === totalPages,
+                      }"
+                    >
+                      <span class="sr-only">Next</span>
+                      <svg
+                        class="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Message Details Modal -->
+        <div
+          x-show="showModal"
+          class="fixed z-10 inset-0 overflow-y-auto"
+          aria-labelledby="modal-title"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"
+          >
+            <div
+              x-show="showModal"
+              x-transition:enter="ease-out duration-300"
+              x-transition:enter-start="opacity-0"
+              x-transition:enter-end="opacity-100"
+              x-transition:leave="ease-in duration-200"
+              x-transition:leave-start="opacity-100"
+              x-transition:leave-end="opacity-0"
+              class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              @click="showModal = false"
+              aria-hidden="true"
+            ></div>
+
+            <span
+              class="hidden sm:inline-block sm:align-middle sm:h-screen"
+              aria-hidden="true"
+              >&#8203;</span
+            >
+
+            <div
+              x-show="showModal"
+              x-transition:enter="ease-out duration-300"
+              x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+              x-transition:leave="ease-in duration-200"
+              x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+              x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              class="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full sm:p-6"
+            >
+              <div>
+                <div class="flex justify-between items-start">
+                  <h3
+                    class="text-lg leading-6 font-medium text-gray-900"
+                    id="modal-title"
+                  >
+                    Message Details
+                  </h3>
+                  <button
+                    type="button"
+                    @click="showModal = false"
+                    class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
+                  >
+                    <span class="sr-only">Close</span>
+                    <svg
+                      class="h-6 w-6"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="mt-4" x-show="selectedMessage">
+                  <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">
+                        Message ID
+                      </dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="selectedMessage?.id"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Status</dt>
+                      <dd class="mt-1 text-sm">
+                        <span
+                          class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                          :class="{
+                            'bg-green-100 text-green-800': selectedMessage?.status === 'sent',
+                            'bg-yellow-100 text-yellow-800': selectedMessage?.status === 'pending' || selectedMessage?.status === 'processing',
+                            'bg-red-100 text-red-800': selectedMessage?.status === 'failed'
+                          }"
+                          x-text="selectedMessage?.status"
+                        >
+                        </span>
+                      </dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">
+                        Phone Number
+                      </dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="selectedMessage?.phone_number"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">SIM ID</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="selectedMessage?.sim_id"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Created</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="formatDate(selectedMessage?.created_at)"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Sent</dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900"
+                        x-text="selectedMessage?.sent_at ? formatDate(selectedMessage.sent_at) : 'N/A'"
+                      ></dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                      <dt class="text-sm font-medium text-gray-500">
+                        Message Content
+                      </dt>
+                      <dd
+                        class="mt-1 text-sm text-gray-900 whitespace-pre-wrap"
+                        x-text="selectedMessage?.content"
+                      ></dd>
+                    </div>
+                    <div
+                      class="sm:col-span-2"
+                      x-show="selectedMessage?.error_message"
+                    >
+                      <dt class="text-sm font-medium text-gray-500">
+                        Error Message
+                      </dt>
+                      <dd
+                        class="mt-1 text-sm text-red-600"
+                        x-text="selectedMessage?.error_message"
+                      ></dd>
+                    </div>
+                    <div
+                      class="sm:col-span-2"
+                      x-show="selectedMessage?.bulk_job_id"
+                    >
+                      <dt class="text-sm font-medium text-gray-500">
+                        Bulk Job ID
+                      </dt>
+                      <dd class="mt-1 text-sm text-gray-900">
+                        <a
+                          :href="'/bulk?job=' + selectedMessage?.bulk_job_id"
+                          class="text-primary-600 hover:text-primary-900"
+                          x-text="selectedMessage?.bulk_job_id"
+                        ></a>
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div
+                  class="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense"
+                >
+                  <button
+                    type="button"
+                    @click="refreshMessageStatus()"
+                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:col-start-1 sm:text-sm"
+                  >
+                    Refresh Status
+                  </button>
+                  <button
+                    type="button"
+                    @click="showModal = false"
+                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:col-start-2 sm:text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alpine.js App Data -->
+    <script>
+      function historyApp() {
+        return {
+          // API settings
+          apiKey: "{{ api_key }}",
+          apiUrl: "/api",
+
+          // Device status
+          deviceConnected: false,
+          deviceDetails: null,
+          isCheckingDevice: false,
+
+          // UI state
+          showAlert: false,
+          alertType: "success",
+          alertMessage: "",
+          isLoading: false,
+          showModal: false,
+          selectedMessage: null,
+
+          // Messages data
+          messages: [],
+
+          // Pagination
+          currentPage: 1,
+          perPage: 20,
+          totalItems: 0,
+          totalPages: 0,
+
+          // Filters
+          filters: {
+            status: "all",
+            dateRange: "all",
+            phoneNumber: "",
+          },
+
+          // Initialize app
+          init() {
+            // Check device status on load
+            this.checkDeviceStatus();
+            // Load initial messages
+            this.loadMessages();
+          },
+
+          // Show alert message
+          showAlertMessage(type, message) {
+            this.alertType = type;
+            this.alertMessage = message;
+            this.showAlert = true;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+              this.showAlert = false;
+            }, 5000);
+          },
+
+          // Check device connection status
+          async checkDeviceStatus() {
+            this.isCheckingDevice = true;
+
+            try {
+              const response = await fetch(`${this.apiUrl}/device/status`, {
+                headers: {
+                  "X-API-Key": this.apiKey,
+                },
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                this.deviceConnected = data.connected;
+                this.deviceDetails = data;
+              } else {
+                this.deviceConnected = false;
+                this.showAlertMessage(
+                  "error",
+                  data.message || "Failed to check device status"
+                );
+              }
+            } catch (error) {
+              console.error("Error checking device status:", error);
+              this.deviceConnected = false;
+              this.showAlertMessage(
+                "error",
+                "Network error while checking device status"
+              );
+            } finally {
+              this.isCheckingDevice = false;
+            }
+          },
+
+          // Load messages with filtering and pagination
+          async loadMessages() {
+            this.isLoading = true;
+            this.messages = [];
+
+            try {
+              let url = new URL(
+                `${this.apiUrl}/messages`,
+                window.location.origin
+              );
+
+              // Add pagination parameters
+              url.searchParams.append("page", this.currentPage);
+              url.searchParams.append("per_page", this.perPage);
+
+              // Add filters if they're active
+              if (this.filters.status !== "all") {
+                url.searchParams.append("status", this.filters.status);
+              }
+
+              if (this.filters.phoneNumber) {
+                url.searchParams.append("phone", this.filters.phoneNumber);
+              }
+
+              if (this.filters.dateRange !== "all") {
+                url.searchParams.append("date_range", this.filters.dateRange);
+              }
+
+              const response = await fetch(url, {
+                headers: {
+                  "X-API-Key": this.apiKey,
+                },
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                this.messages = data.messages || [];
+                this.totalItems = data.total || 0;
+                this.totalPages = data.pages || 0;
+              } else {
+                console.error("Failed to load messages:", data);
+                this.showAlertMessage(
+                  "error",
+                  data.message || "Failed to load messages"
+                );
+              }
+            } catch (error) {
+              console.error("Error loading messages:", error);
+              this.showAlertMessage(
+                "error",
+                "Network error while loading messages"
+              );
+            } finally {
+              this.isLoading = false;
+            }
+          },
+
+          // Pagination methods
+          get startItem() {
+            return this.totalItems === 0
+              ? 0
+              : (this.currentPage - 1) * this.perPage + 1;
+          },
+
+          get endItem() {
+            return Math.min(this.currentPage * this.perPage, this.totalItems);
+          },
+
+          get pageNumbers() {
+            let pages = [];
+            let startPage = Math.max(1, this.currentPage - 2);
+            let endPage = Math.min(this.totalPages, this.currentPage + 2);
+
+            for (let i = startPage; i <= endPage; i++) {
+              pages.push(i);
+            }
+
+            return pages;
+          },
+
+          previousPage() {
+            if (this.currentPage > 1) {
+              this.currentPage--;
+              this.loadMessages();
+            }
+          },
+
+          nextPage() {
+            if (this.currentPage < this.totalPages) {
+              this.currentPage++;
+              this.loadMessages();
+            }
+          },
+
+          goToPage(page) {
+            if (page !== this.currentPage) {
+              this.currentPage = page;
+              this.loadMessages();
+            }
+          },
+
+          // View message details
+          viewMessageDetails(message) {
+            this.selectedMessage = { ...message };
+            this.showModal = true;
+          },
+
+          // Refresh message status
+          async refreshMessageStatus() {
+            if (!this.selectedMessage) return;
+
+            try {
+              const messageId = this.selectedMessage.id;
+              const response = await fetch(`${this.apiUrl}/sms/${messageId}`, {
+                headers: {
+                  "X-API-Key": this.apiKey,
+                },
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                // Update the selected message with fresh data
+                this.selectedMessage = data;
+
+                // Also update in the main messages list if present
+                const index = this.messages.findIndex(
+                  (m) => m.id === messageId
+                );
+                if (index !== -1) {
+                  this.messages[index] = data;
+                }
+
+                this.showAlertMessage("success", "Message status updated");
+              } else {
+                this.showAlertMessage(
+                  "error",
+                  "Failed to refresh message status"
+                );
+              }
+            } catch (error) {
+              console.error("Error refreshing message status:", error);
+              this.showAlertMessage(
+                "error",
+                "Network error while updating message"
+              );
+            }
+          },
+
+          // Format date for display
+          formatDate(dateString) {
+            if (!dateString) return "N/A";
+            const date = new Date(dateString);
+            return date.toLocaleString();
+          },
+        };
+      }
+    </script>
+  </body>
+</html>
