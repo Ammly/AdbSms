@@ -2,6 +2,9 @@
 
 A simple Python utility to send SMS messages programmatically using ADB (Android Debug Bridge) to a connected Android device.
 
+![Dashboard - Sending individual SMS messages](/screenshots/AdbSms_Dashboard.png)
+*Dashboard interface for sending individual SMS messages and viewing recent activity*
+
 ## Overview
 
 This tool reads phone numbers and message content from a CSV file and sends SMS messages to the specified recipients using ADB commands. It's useful for:
@@ -239,9 +242,6 @@ http://localhost:5000/
 - **Statistics Dashboard** - View charts and metrics about message sending performance
 
 #### Screenshots
-
-![Dashboard - Sending individual SMS messages](/screenshots/AdbSms_Dashboard.png)
-*Dashboard interface for sending individual SMS messages and viewing recent activity*
 
 ![Bulk SMS Management - Upload and manage bulk SMS campaigns](/screenshots/AdbSms_Bulk.png)
 *Bulk SMS interface for uploading CSV files and managing bulk messaging jobs*
