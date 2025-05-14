@@ -240,7 +240,14 @@ http://localhost:5000/
 
 #### Screenshots
 
-[Screenshots to be added]
+![Dashboard - Sending individual SMS messages](/screenshots/AdbSms_Dashboard.png)
+*Dashboard interface for sending individual SMS messages and viewing recent activity*
+
+![Bulk SMS Management - Upload and manage bulk SMS campaigns](/screenshots/AdbSms_Bulk.png)
+*Bulk SMS interface for uploading CSV files and managing bulk messaging jobs*
+
+![Statistics Dashboard - Visualize message statistics](/screenshots/AdbSms_Stats.png)
+*Statistics interface showing message delivery metrics and performance charts*
 
 ### As a Python Module
 
